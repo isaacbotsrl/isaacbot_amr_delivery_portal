@@ -169,11 +169,7 @@ export default function App() {
                     <button type="button" className="btn-small btn-danger" onClick={() => {
                       const n = tickets.filter((t) => ['DONE', 'CANCELLED', 'FAILED'].includes(t.status)).length;
                       if (window.confirm(`Delete all ${n} finished tickets? This cannot be undone.`)) {
-                        void robotCmd(async () => {
-                          const r = await api.clearFinished();
-                          if (selected && !selected.active) setSelectedId(null);
-                          return r;
-                        }, 'Finished tickets deleted.');
+                        void robotCmd(() => api.clearFinished(), 'Finished tickets deleted.');
                       }
                     }}>Clear finished</button>
                   )}
