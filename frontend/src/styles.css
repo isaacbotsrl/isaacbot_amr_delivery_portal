@@ -156,3 +156,16 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .robot-label { position: absolute; left: 30px; top: 4px; white-space: nowrap; font: 600 11px var(--font-head);
                background: var(--card); color: var(--text); padding: 1px 6px; border-radius: 999px;
                border: 1px solid var(--line); }
+
+/* Settings */
+.check { flex-direction: row !important; align-items: center; gap: 8px !important; color: var(--text) !important;
+         font-size: 13px !important; font-weight: 400 !important; }
+.btn-small.on { border-color: var(--accent); color: var(--accent); }
+.ok { color: var(--ok); font-size: 13px; }
+details summary { cursor: pointer; }
+.parking-dot { stroke: var(--ink); fill: var(--card); fill-opacity: 1; stroke-width: 2; }
+.heading-arrow { width: 60px; height: 60px; position: relative; pointer-events: none; }
+.heading-arrow::before { content: ""; position: absolute; left: 50%; top: 0; transform: translateX(-50%);
+                         border: 7px solid transparent; border-bottom: 12px solid var(--warn); }
+.heading-arrow::after { content: ""; position: absolute; left: 50%; top: 18px; width: 3px; height: 12px;
+                        transform: translateX(-50%); background: var(--warn); }

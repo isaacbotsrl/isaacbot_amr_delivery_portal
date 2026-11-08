@@ -6,7 +6,7 @@ import base64
 import hmac
 import json
 import os
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, List, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from ..application.delivery_service import DeliveryService, NotFound
 from ..domain.geo import GeoPoint
 from ..domain.ports import RoutingError
+from ..domain.settings import DeliverySettings
 from ..domain.tickets import TicketError
 from ..infrastructure.geocoding import GeocodingError
 from ..infrastructure.http import HttpError
@@ -37,6 +38,15 @@ class RobotChoice(BaseModel):
 
 class Reason(BaseModel):
     reason: str = Field('', max_length=300)
+
+
+class SettingsBody(BaseModel):
+    datum: List[float] = Field(min_length=2, max_length=2)
+    shop: List[float] = Field(min_length=2, max_length=2)
+    enu_map_id: str = Field('enu_pizzeria', max_length=64)
+    parked_heading_deg: Optional[float] = None
+    cargo_actions: bool = False
+    auto_return: bool = True
 
 
 def create_app(service: DeliveryService, info: Dict, password: str = '',
@@ -86,7 +96,18 @@ def create_app(service: DeliveryService, info: Dict, password: str = '',
 
     @app.get('/api/config')
     def config():
-        return info
+        # Static deployment facts + the editable delivery settings (Settings page).
+        return {**info, **service.delivery_settings().to_dict(),
+                'map_id': service.datum.map_id}
+
+    @app.get('/api/settings')
+    def get_settings():
+        return service.delivery_settings().to_dict()
+
+    @app.put('/api/settings')
+    def put_settings(body: SettingsBody):
+        new = DeliverySettings.from_dict(body.model_dump())
+        return service.update_settings(new).to_dict()
 
     @app.get('/api/snapshot')
     def snapshot():

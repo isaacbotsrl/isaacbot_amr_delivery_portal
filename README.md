@@ -40,6 +40,22 @@ of a fixed datum, the pizzeria. On the robot, the VDA 5050 adapter:
 That robot-side work is Phases 1–2 of the delivery plan, in the ardennes workspace. Until then, a
 robot's position only shows up once its adapter reports the ENU frame or a `gpsFix`.
 
+## Settings: the pizzeria location
+
+The **Settings** tab holds:
+- **Pizzeria location:** typed, or picked on the map. It is the origin of the shared ENU frame.
+- **Parking spot.**
+- **Parked heading:** the direction the robots face when parked, shown as an arrow on the map.
+- **Cargo box and auto-return.**
+
+The values are stored in the database. `.env` only seeds them on the very first start.
+
+Changes are refused while deliveries are running, because their orders use the current frame.
+
+The robots need **no location of their own**. Every `startTrip` carries `datum_lat`,
+`datum_lon`, `enu_map_id` and `parked_heading_deg`, and the robot aligns its fresh map to
+exactly that. So the portal and the robots cannot disagree, and moving the pizzeria is one save.
+
 ## A delivery, step by step
 
 | Status | What happens |

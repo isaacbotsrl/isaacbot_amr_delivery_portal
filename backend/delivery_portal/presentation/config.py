@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 
 
 def _float(name: str, default: float) -> float:
@@ -49,12 +49,12 @@ class Config:
     cargo_actions: bool = False
     auto_return: bool = True
     start_trip: bool = True
+    parked_heading_deg: Optional[float] = None
 
     @staticmethod
     def from_env() -> 'Config':
-        if not os.environ.get('DATUM_LAT') or not os.environ.get('DATUM_LON'):
-            raise ValueError('DATUM_LAT and DATUM_LON (the pizzeria) are required')
-        lat, lon = _float('DATUM_LAT', 0.0), _float('DATUM_LON', 0.0)
+        # Only the first start's seed: afterwards the Settings page (database) rules.
+        lat, lon = _float('DATUM_LAT', 44.4268), _float('DATUM_LON', 26.1025)
         return Config(
             datum_lat=lat, datum_lon=lon,
             enu_map_id=os.environ.get('ENU_MAP_ID', 'enu_site'),
@@ -81,4 +81,6 @@ class Config:
             cargo_actions=_bool('CARGO_ACTIONS', False),
             auto_return=_bool('AUTO_RETURN', True),
             start_trip=_bool('START_TRIP', True),
+            parked_heading_deg=(_float('PARKED_HEADING_DEG', 0.0)
+                                if os.environ.get('PARKED_HEADING_DEG', '').strip() else None),
         )

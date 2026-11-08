@@ -67,3 +67,12 @@ class TicketRepository(ABC):
     @abstractmethod
     def list(self, include_closed_since: Optional[float] = None) -> List[Ticket]:
         """Open tickets, plus closed ones updated after include_closed_since (None: all)."""
+
+
+class SettingsRepository(ABC):
+    @abstractmethod
+    def load(self) -> Optional[Dict]:
+        """The stored settings (DeliverySettings.to_dict()), or None before the first save."""
+
+    @abstractmethod
+    def save(self, settings: Dict) -> None: ...

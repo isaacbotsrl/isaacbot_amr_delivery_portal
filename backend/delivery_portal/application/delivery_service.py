@@ -20,8 +20,9 @@ from ..domain.geo import EnuDatum, GeoPoint
 from ..domain.order_builder import (BuiltOrder, OrderSettings, build_order, instant_action,
                                     with_header)
 from ..domain.ports import (FleetSource, GeocodeResult, Geocoder, OrderPublisher, RoutedPath,
-                            RoutingError, RoutingProvider, TicketRepository)
+                            RoutingError, RoutingProvider, SettingsRepository, TicketRepository)
 from ..domain.robots import Robot, RobotStatus, parse_state
+from ..domain.settings import DeliverySettings
 from ..domain.tickets import Ticket, TicketError, TicketStatus
 
 log = logging.getLogger(__name__)
@@ -59,14 +60,61 @@ class DeliveryService:
     def __init__(self, datum: EnuDatum, shop: GeoPoint, router: RoutingProvider,
                  geocoder: Optional[Geocoder], fleet: FleetSource, publisher: OrderPublisher,
                  tickets: TicketRepository, settings: Settings = Settings(),
-                 clock: Callable[[], float] = time.time):
+                 clock: Callable[[], float] = time.time,
+                 parked_heading_deg: Optional[float] = None,
+                 settings_store: Optional[SettingsRepository] = None,
+                 enu_map_id: Optional[str] = None):
         self.datum, self.shop = datum, shop
+        # The configured base name (the datum's map id carries the location fingerprint).
+        self.enu_map_id = enu_map_id or datum.map_id
+        self.parked_heading_deg = parked_heading_deg
+        self.settings_store = settings_store
         self.router, self.geocoder, self.fleet = router, geocoder, fleet
         self.publisher, self.tickets = publisher, tickets
         self.settings, self.clock = settings, clock
         self._lock = threading.RLock()
         self._robots: Dict[str, Robot] = {}
         self.fleet_error = ''
+
+    # --- settings ------------------------------------------------------------------------
+
+    def delivery_settings(self) -> DeliverySettings:
+        with self._lock:
+            return DeliverySettings(
+                datum=self.datum.origin, shop=self.shop, enu_map_id=self.enu_map_id,
+                parked_heading_deg=self.parked_heading_deg,
+                cargo_actions=self.settings.order.cargo_actions,
+                auto_return=self.settings.auto_return)
+
+    def update_settings(self, new: DeliverySettings) -> DeliverySettings:
+        """
+        Change the pizzeria location and delivery options. Refused while deliveries run: their
+        orders are in the old frame. Robots get the new frame with their next startTrip.
+        """
+        with self._lock:
+            active = [t for t in self.tickets.list() if t.active]
+            if active:
+                raise TicketError(f'finish or cancel the {len(active)} active '
+                                  f'deliver{"y" if len(active) == 1 else "ies"} first: '
+                                  'they run in the old location\'s frame')
+            self.datum, self.shop = new.enu, new.shop
+            self.enu_map_id = new.enu_map_id
+            self.parked_heading_deg = new.parked_heading_deg
+            self.settings = replace(
+                self.settings, order=replace(self.settings.order, cargo_actions=new.cargo_actions),
+                auto_return=new.auto_return)
+            if self.settings_store is not None:
+                self.settings_store.save(new.to_dict())
+            log.info('settings changed: pizzeria %s, frame %s', new.datum, new.frame_id)
+            return new
+
+    def _trip_parameters(self) -> Dict:
+        """startTrip's parameters: the frame the robot aligns its fresh map to."""
+        params = {'datum_lat': self.datum.origin.lat, 'datum_lon': self.datum.origin.lon,
+                  'enu_map_id': self.datum.map_id}
+        if self.parked_heading_deg is not None:
+            params['parked_heading_deg'] = self.parked_heading_deg
+        return params
 
     # --- fleet ---------------------------------------------------------------------------
 
@@ -287,7 +335,8 @@ class DeliveryService:
             if self.settings.start_trip:
                 trip_action_id = f'{order_id}-startTrip'
                 self.publisher.publish_instant_actions(
-                    robot.identity, instant_action('startTrip', trip_action_id))
+                    robot.identity,
+                    instant_action('startTrip', trip_action_id, self._trip_parameters()))
                 note = f'{robot.name}: starting a fresh map'
             else:
                 self.publisher.publish_order(robot.identity, plan.built.order)

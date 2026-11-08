@@ -1,4 +1,6 @@
-import type { GeocodeHit, NewTicket, Plan, PortalConfig, Snapshot, Ticket } from './types';
+import type {
+  DeliverySettings, GeocodeHit, NewTicket, Plan, PortalConfig, Snapshot, Ticket,
+} from './types';
 
 export class ApiError extends Error {}
 
@@ -43,4 +45,7 @@ export const api = {
   resume: (robot: string) => post(`/api/robots/${encodeURIComponent(robot)}/resume`),
   returnRobot: (robot: string) => post(`/api/robots/${encodeURIComponent(robot)}/return`),
   refreshFleet: () => post<{ error: string }>('/api/fleet/refresh'),
+  settings: () => call<DeliverySettings>('/api/settings'),
+  saveSettings: (s: DeliverySettings) =>
+    call<DeliverySettings>('/api/settings', { method: 'PUT', body: JSON.stringify(s) }),
 };

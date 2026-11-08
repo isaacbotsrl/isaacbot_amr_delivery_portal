@@ -3,6 +3,7 @@ import { api } from './api';
 import MapView from './MapView';
 import TicketDetail from './TicketDetail';
 import TicketForm from './TicketForm';
+import SettingsPanel, { type PickTarget } from './SettingsPanel';
 import { STATUS_LABEL, STATUS_TONE, ago, distance, duration, robotBlocker } from './format';
 import type { LatLon, Plan, PortalConfig, Robot, Snapshot, Ticket } from './types';
 
@@ -50,7 +51,9 @@ export default function App() {
   const [config, setConfig] = useState<PortalConfig | null>(null);
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [connError, setConnError] = useState('');
-  const [tab, setTab] = useState<'tickets' | 'robots'>('tickets');
+  const [tab, setTab] = useState<'tickets' | 'robots' | 'settings'>('tickets');
+  const [pickTarget, setPickTarget] = useState<PickTarget | null>(null);
+  const [picked, setPicked] = useState<{ target: PickTarget; point: LatLon } | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState<LatLon | null>(null);
@@ -59,9 +62,19 @@ export default function App() {
   const [notice, setNotice] = useState('');
   const [now, setNow] = useState(Date.now() / 1000);
 
-  useEffect(() => {
+  const loadConfig = useCallback(() => {
     api.config().then(setConfig).catch((e) => setConnError(String(e.message)));
   }, []);
+  useEffect(loadConfig, [loadConfig]);
+
+  const onPick = useCallback((p: LatLon) => {
+    if (pickTarget) {
+      setPicked({ target: pickTarget, point: p });
+      setPickTarget(null);
+    } else {
+      setDraft(p);
+    }
+  }, [pickTarget]);
 
   useEffect(() => {
     let stop = false;
@@ -127,6 +140,8 @@ export default function App() {
                     onClick={() => setTab('tickets')}>Deliveries ({tickets.filter((t) => t.active || t.status === 'NEW').length})</button>
             <button role="tab" aria-selected={tab === 'robots'} className={tab === 'robots' ? 'on' : ''}
                     onClick={() => setTab('robots')}>Robots ({robots.filter((r) => r.online).length}/{robots.length})</button>
+            <button role="tab" aria-selected={tab === 'settings'} className={tab === 'settings' ? 'on' : ''}
+                    onClick={() => setTab('settings')}>Settings</button>
           </nav>
 
           {notice && <p className="notice" onClick={() => setNotice('')}>{notice}</p>}
@@ -175,6 +190,12 @@ export default function App() {
             </>
           )}
 
+          {tab === 'settings' && (
+            <SettingsPanel activeDeliveries={tickets.filter((t) => t.active).length}
+                           picked={picked} picking={pickTarget} setPicking={setPickTarget}
+                           onSaved={loadConfig} />
+          )}
+
           {tab === 'robots' && (
             <ul className="robots">
               {robots.length === 0 && <li className="muted empty">No robots from the site manager.</li>}
@@ -193,7 +214,8 @@ export default function App() {
         </aside>
 
         <MapView config={config} robots={robots} tickets={tickets} selectedTicket={selected}
-                 plan={plan} draft={draft} picking={creating} onPick={setDraft} onSelectTicket={select} />
+                 plan={plan} draft={draft} picking={(creating && tab === 'tickets') || pickTarget !== null}
+                 onPick={onPick} onSelectTicket={select} />
       </main>
     </div>
   );

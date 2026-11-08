@@ -81,6 +81,7 @@ class FakeRobot:
                     t = a['actionType']
                     if t == 'startTrip':
                         self.actions[a['actionId']] = [t, 'RUNNING', time.time()]
+                        self.take_frame({q['key']: q['value'] for q in a.get('actionParameters', [])})
                     if t == 'cancelOrder':
                         self.nodes = []
                     elif t == 'startPause':
@@ -88,6 +89,17 @@ class FakeRobot:
                     elif t == 'stopPause':
                         self.paused = False
                     print(f'{self.args.serial}: {t}', flush=True)
+
+    def take_frame(self, params):
+        """As the real adapter: the trip's ENU frame comes with startTrip. Same spot on Earth."""
+        if 'datum_lat' not in params or 'datum_lon' not in params:
+            return
+        here = self.datum.to_geo(EnuPoint(self.x, self.y))
+        self.datum = EnuDatum(GeoPoint(float(params['datum_lat']), float(params['datum_lon'])),
+                              str(params.get('enu_map_id') or self.datum.map_id))
+        p = self.datum.to_enu(here)
+        self.x, self.y = p.x, p.y
+        print(f'{self.args.serial}: trip frame {self.datum.map_id}', flush=True)
 
     def step(self, dt):
         with self.lock:

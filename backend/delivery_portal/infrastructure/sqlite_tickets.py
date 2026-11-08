@@ -9,7 +9,7 @@ import threading
 from typing import List, Optional
 
 from ..domain.geo import GeoPoint
-from ..domain.ports import TicketRepository
+from ..domain.ports import SettingsRepository, TicketRepository
 from ..domain.tickets import CLOSED, Ticket, TicketEvent, TicketStatus
 
 
@@ -85,3 +85,27 @@ class SqliteTicketRepository(TicketRepository):
                     f'SELECT body FROM tickets WHERE status NOT IN ({marks}) OR updated_at >= ?',
                     (*closed, include_closed_since)).fetchall()
         return [ticket_from_dict(json.loads(r[0])) for r in rows]
+
+
+class SqliteSettingsRepository(SettingsRepository):
+    """The delivery settings, one JSON row in the same database as the tickets."""
+
+    def __init__(self, path: str):
+        if path != ':memory:':
+            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        self._db = sqlite3.connect(path, check_same_thread=False)
+        self._lock = threading.Lock()
+        with self._lock, self._db:
+            self._db.execute(
+                'CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, body TEXT NOT NULL)')
+
+    def load(self):
+        with self._lock:
+            row = self._db.execute("SELECT body FROM settings WHERE key = 'delivery'").fetchone()
+        return json.loads(row[0]) if row else None
+
+    def save(self, settings) -> None:
+        with self._lock, self._db:
+            self._db.execute(
+                "INSERT INTO settings (key, body) VALUES ('delivery', ?) "
+                'ON CONFLICT(key) DO UPDATE SET body=excluded.body', (json.dumps(settings),))

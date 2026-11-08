@@ -63,3 +63,17 @@ def test_ticket_flow(client):
                                                         'lon': 0}).status_code == 422
     r = client.post(f'/api/tickets/{tid}/cancel', headers=h, json={'reason': 'customer called'})
     assert r.json()['status'] == 'CANCELLED'
+
+
+def test_settings_round_trip_and_validation(client):
+    h = auth()
+    s = client.get('/api/settings', headers=h).json()
+    s['datum'] = [44.43, 26.11]
+    s['shop'] = [44.4301, 26.1101]
+    s['parked_heading_deg'] = 270
+    r = client.put('/api/settings', headers=h, json=s)
+    assert r.status_code == 200, r.text
+    cfg = client.get('/api/config', headers=h).json()
+    assert cfg['datum'] == [44.43, 26.11] and cfg['parked_heading_deg'] == 270
+    s['parked_heading_deg'] = 999
+    assert client.put('/api/settings', headers=h, json=s).status_code == 400

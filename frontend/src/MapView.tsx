@@ -51,7 +51,7 @@ export default function MapView(p: Props) {
   // Create the map once.
   useEffect(() => {
     if (!el.current || map.current) return;
-    const m = L.map(el.current, { zoomControl: true }).setView(p.config.shop, 16);
+    const m = L.map(el.current, { zoomControl: true }).setView(p.config.datum, 16);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -59,11 +59,27 @@ export default function MapView(p: Props) {
     for (const name of ['route', 'plan', 'trails', 'tickets', 'robots', 'shop', 'draft']) {
       layers.current[name] = L.layerGroup().addTo(m);
     }
-    L.marker(p.config.shop, {
+    L.marker(p.config.datum, {
       icon: L.divIcon({ className: '', html: '<div class="shop-pin">🍕</div>', iconSize: [34, 34], iconAnchor: [17, 17] }),
       title: 'Pizzeria',
       zIndexOffset: 500,
-    }).bindTooltip('Pizzeria (shop)').addTo(layers.current.shop);
+    }).bindTooltip('Pizzeria').addTo(layers.current.shop);
+    const parked = p.config.shop;
+    if (parked[0] !== p.config.datum[0] || parked[1] !== p.config.datum[1]) {
+      L.circleMarker(parked, { radius: 6, className: 'parking-dot' })
+        .bindTooltip('Parking spot').addTo(layers.current.shop);
+    }
+    if (p.config.parked_heading_deg != null) {
+      L.marker(parked, {
+        icon: L.divIcon({
+          className: '',
+          html: `<div class="heading-arrow" style="transform: rotate(${p.config.parked_heading_deg}deg)"></div>`,
+          iconSize: [60, 60], iconAnchor: [30, 30],
+        }),
+        interactive: false,
+        zIndexOffset: 400,
+      }).addTo(layers.current.shop);
+    }
     m.on('click', (e: L.LeafletMouseEvent) => {
       if (picking.current) onPick.current([e.latlng.lat, e.latlng.lng]);
     });
@@ -75,7 +91,9 @@ export default function MapView(p: Props) {
       m.remove();
       map.current = null;
     };
-  }, [p.config.shop]);
+    // Re-created when the settings change (the config is only re-read after a save).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify([p.config.datum, p.config.shop, p.config.parked_heading_deg])]);
 
   useEffect(() => {
     el.current?.classList.toggle('picking', p.picking);

@@ -14,7 +14,8 @@ from ..infrastructure.geocoding import DEFAULT_NOMINATIM_URL, NominatimGeocoder
 from ..infrastructure.mqtt_bridge import MqttBridge
 from ..infrastructure.routing import make_router
 from ..infrastructure.site_manager import SiteManagerFleet, StaticFleet
-from ..infrastructure.sqlite_tickets import SqliteTicketRepository
+from ..domain.settings import DeliverySettings
+from ..infrastructure.sqlite_tickets import SqliteSettingsRepository, SqliteTicketRepository
 from .api import create_app
 from .config import Config
 
@@ -25,8 +26,18 @@ log = logging.getLogger('delivery_portal')
 
 
 def build(cfg: Config):
-    datum = EnuDatum(GeoPoint(cfg.datum_lat, cfg.datum_lon), cfg.enu_map_id)
-    shop = GeoPoint(cfg.shop_lat, cfg.shop_lon)
+    # The delivery settings live in the database (Settings page); .env only seeds them once.
+    store = SqliteSettingsRepository(cfg.database)
+    stored = store.load()
+    if stored is not None:
+        delivery = DeliverySettings.from_dict(stored)
+    else:
+        delivery = DeliverySettings(
+            datum=GeoPoint(cfg.datum_lat, cfg.datum_lon), shop=GeoPoint(cfg.shop_lat, cfg.shop_lon),
+            enu_map_id=cfg.enu_map_id, parked_heading_deg=cfg.parked_heading_deg,
+            cargo_actions=cfg.cargo_actions, auto_return=cfg.auto_return)
+        store.save(delivery.to_dict())
+    datum, shop = delivery.enu, delivery.shop
     fleet = (StaticFleet(cfg.static_fleet) if cfg.static_fleet else
              SiteManagerFleet(cfg.site_manager_url, cfg.site_manager_password,
                               cfg.delivery_robots))
@@ -34,21 +45,20 @@ def build(cfg: Config):
     settings = Settings(
         order=OrderSettings(spacing_m=cfg.waypoint_spacing_m, max_speed=cfg.max_speed,
                             destination_tolerance_m=cfg.destination_tolerance_m,
-                            cargo_actions=cfg.cargo_actions),
-        eta=EtaEstimator(speed=cfg.max_speed), auto_return=cfg.auto_return,
+                            cargo_actions=delivery.cargo_actions),
+        eta=EtaEstimator(speed=cfg.max_speed), auto_return=delivery.auto_return,
         start_trip=cfg.start_trip)
     service = DeliveryService(
         datum, shop,
         make_router(cfg.routing_provider, cfg.routing_url, cfg.google_api_key),
         NominatimGeocoder(cfg.nominatim_url or DEFAULT_NOMINATIM_URL, cfg.geocode_countries),
-        fleet, bridge, SqliteTicketRepository(cfg.database), settings)
+        fleet, bridge, SqliteTicketRepository(cfg.database), settings,
+        parked_heading_deg=delivery.parked_heading_deg, settings_store=store,
+        enu_map_id=delivery.enu_map_id)
     bridge.on_state = service.on_state
     bridge.on_connection = service.on_connection
     info = {
-        'datum': [cfg.datum_lat, cfg.datum_lon], 'shop': [cfg.shop_lat, cfg.shop_lon],
-        'map_id': cfg.enu_map_id, 'routing': cfg.routing_provider,
-        'cargo_actions': cfg.cargo_actions, 'auto_return': cfg.auto_return,
-        'start_trip': cfg.start_trip,
+        'routing': cfg.routing_provider, 'start_trip': cfg.start_trip,
         'max_speed': cfg.max_speed, 'waypoint_spacing_m': cfg.waypoint_spacing_m,
     }
     stop = threading.Event()

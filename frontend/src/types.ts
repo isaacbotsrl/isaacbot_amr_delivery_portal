@@ -80,6 +80,8 @@ export interface PortalConfig {
   cargo_actions: boolean;
   auto_return: boolean;
   start_trip: boolean;
+  enu_map_id: string;
+  parked_heading_deg: number | null;
   max_speed: number;
   waypoint_spacing_m: number;
 }
@@ -96,6 +98,15 @@ export interface Plan {
   eta_s: number;
   nodes: number;
   order: Record<string, unknown>;
+}
+
+export interface DeliverySettings {
+  datum: LatLon;
+  shop: LatLon;
+  enu_map_id: string;
+  parked_heading_deg: number | null;
+  cargo_actions: boolean;
+  auto_return: boolean;
 }
 
 export interface GeocodeHit { label: string; point: LatLon }

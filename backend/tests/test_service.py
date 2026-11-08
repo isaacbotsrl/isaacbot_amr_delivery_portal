@@ -248,3 +248,57 @@ def test_start_trip_failure_fails_the_ticket():
     assert t.status == TicketStatus.FAILED and 'startTrip failed' in t.error
     assert pub.orders == []
     assert svc.retry(t.id).trip_action_id == ''
+
+
+def test_start_trip_carries_the_pizzeria_frame():
+    svc, _, _, pub, _ = make(start_trip=True)
+    svc.parked_heading_deg = 90.0
+    online(svc)
+    svc.assign(svc.create_ticket('Ana', CUSTOMER).id, 'ardennes_1')
+    params = {p['key']: p['value'] for p in pub.instant[-1][1]['actions'][0]['actionParameters']}
+    assert params == {'datum_lat': SHOP.lat, 'datum_lon': SHOP.lon, 'enu_map_id': 'enu_test',
+                      'parked_heading_deg': 90.0}
+
+
+def test_settings_change_moves_the_frame_and_is_refused_during_deliveries():
+    from delivery_portal.domain.settings import DeliverySettings
+    from delivery_portal.infrastructure.sqlite_tickets import SqliteSettingsRepository
+    svc, _, _, pub, _ = make()
+    svc.settings_store = store = SqliteSettingsRepository(':memory:')
+    new_shop = GeoPoint(44.4300, 26.1100)
+    new = DeliverySettings(datum=new_shop, shop=new_shop, enu_map_id='enu_new',
+                           parked_heading_deg=180.0, cargo_actions=True, auto_return=False)
+    online(svc)
+    t = svc.assign(svc.create_ticket('Ana', CUSTOMER).id, 'ardennes_1')
+    with pytest.raises(TicketError, match='active'):
+        svc.update_settings(new)
+    svc.cancel(t.id)
+    svc.update_settings(new)
+    assert svc.delivery_settings() == new
+    assert DeliverySettings.from_dict(store.load()) == new
+    assert svc.datum.map_id == new.frame_id and new.frame_id.startswith('enu_new-')
+    assert svc.settings.order.cargo_actions
+    # Robots still reporting the old frame drop back to GPS / unknown until their next trip.
+    online(svc, x=5.0, y=5.0, map_id='enu_test')
+    assert svc.robot('ardennes_1').status.position is None
+
+
+def test_settings_validation():
+    from delivery_portal.domain.settings import DeliverySettings
+    p = GeoPoint(44.4268, 26.1025)
+    with pytest.raises(TicketError, match='compass'):
+        DeliverySettings(datum=p, shop=p, parked_heading_deg=400)
+    with pytest.raises(TicketError, match='parking spot'):
+        DeliverySettings(datum=p, shop=GeoPoint(44.5, 26.1025))
+    with pytest.raises(TicketError, match='map id'):
+        DeliverySettings(datum=p, shop=p, enu_map_id='bad id/')
+    d = DeliverySettings(datum=p, shop=p, parked_heading_deg=None)
+    assert DeliverySettings.from_dict(d.to_dict()) == d
+
+
+def test_frame_id_changes_with_the_location():
+    from delivery_portal.domain.settings import DeliverySettings
+    a = GeoPoint(44.4268, 26.1025)
+    b = GeoPoint(44.4269, 26.1025)
+    assert DeliverySettings(datum=a, shop=a).frame_id == DeliverySettings(datum=a, shop=a).frame_id
+    assert DeliverySettings(datum=a, shop=a).frame_id != DeliverySettings(datum=b, shop=b).frame_id
