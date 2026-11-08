@@ -302,3 +302,14 @@ def test_frame_id_changes_with_the_location():
     b = GeoPoint(44.4269, 26.1025)
     assert DeliverySettings(datum=a, shop=a).frame_id == DeliverySettings(datum=a, shop=a).frame_id
     assert DeliverySettings(datum=a, shop=a).frame_id != DeliverySettings(datum=b, shop=b).frame_id
+
+
+def test_a_new_ticket_gets_its_route_from_the_pizzeria():
+    svc, _, router, _, _ = make()
+    t = svc.create_ticket('Ana', CUSTOMER)
+    assert router.calls[-1] == (SHOP, CUSTOMER)
+    assert len(t.route) > 2 and t.distance_m == pytest.approx(40 + 60, abs=0.5)
+    assert t.eta_s > 0 and t.status == TicketStatus.NEW and not t.error
+    router.fail = True
+    t2 = svc.create_ticket('Bob', CUSTOMER)
+    assert t2.route == [] and 'No walking route' in t2.error

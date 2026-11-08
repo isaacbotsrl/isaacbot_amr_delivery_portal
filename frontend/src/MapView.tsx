@@ -158,6 +158,9 @@ export default function MapView(p: Props) {
     }
     if (p.selectedTicket && p.selectedTicket.route.length > 1) {
       L.polyline(p.selectedTicket.route, { className: 'route', interactive: false }).addTo(route);
+      for (const w of p.selectedTicket.route.slice(1, -1)) {
+        L.circleMarker(w, { radius: 3, className: 'route-node', interactive: false }).addTo(route);
+      }
     }
   }, [p.tickets, p.selectedTicket]);
 

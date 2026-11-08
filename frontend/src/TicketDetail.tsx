@@ -21,7 +21,13 @@ const SOURCE: Record<Plan['start_source'], string> = {
 
 export default function TicketDetail({ ticket: t, robots, busyRobots, config, plan, setPlan, onClose }: Props) {
   const free = robots.filter((r) => !robotBlocker(r, busyRobots.has(r.name)));
-  const [robot, setRobot] = useState(free[0]?.name ?? '');
+  // Any delivery robot can be previewed (even offline); only a ready one can be sent.
+  const previewable = robots.filter((r) => r.delivery);
+  const [robot, setRobot] = useState(free[0]?.name ?? previewable[0]?.name ?? '');
+  const blocker = (() => {
+    const r = robots.find((x) => x.name === robot);
+    return r ? robotBlocker(r, busyRobots.has(r.name)) : 'no robot';
+  })();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [showJson, setShowJson] = useState(false);
@@ -33,8 +39,8 @@ export default function TicketDetail({ ticket: t, robots, busyRobots, config, pl
   }, [t.id, setPlan]);
 
   useEffect(() => {
-    if (!robot && free.length) setRobot(free[0].name);
-  }, [free, robot]);
+    if (!robot && (free.length || previewable.length)) setRobot((free[0] ?? previewable[0]).name);
+  }, [free, previewable, robot]);
 
   const run = async (f: () => Promise<unknown>) => {
     setBusy(true);
@@ -79,7 +85,7 @@ export default function TicketDetail({ ticket: t, robots, busyRobots, config, pl
               {robots.map((r) => {
                 const why = robotBlocker(r, busyRobots.has(r.name));
                 return (
-                  <option key={r.name} value={r.name} disabled={!!why}>
+                  <option key={r.name} value={r.name} disabled={!r.delivery}>
                     {r.name}{why ? ` (${why})` : r.battery != null ? ` · ${Math.round(r.battery)}%` : ''}
                   </option>
                 );
@@ -91,11 +97,15 @@ export default function TicketDetail({ ticket: t, robots, busyRobots, config, pl
                     onClick={() => void run(async () => setPlan(await api.plan(t.id, robot)))}>
               Preview route
             </button>
-            <button type="button" className="btn-primary" disabled={!robot || busy}
+            <button type="button" className="btn-primary" disabled={!robot || busy || !!blocker}
+                    title={blocker ? `${robot} cannot take it: ${blocker}` : ''}
                     onClick={() => void run(async () => { await api.assign(t.id, robot); setPlan(null); })}>
               Send {robot || 'robot'}
             </button>
           </div>
+          {robot && blocker && (
+            <p className="muted small">{robot} is {blocker}: you can preview the route, not send it.</p>
+          )}
           {plan && plan.robot === robot && (
             <div className="plan">
               <p>

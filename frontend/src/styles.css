@@ -169,3 +169,4 @@ details summary { cursor: pointer; }
                          border: 7px solid transparent; border-bottom: 12px solid var(--warn); }
 .heading-arrow::after { content: ""; position: absolute; left: 50%; top: 18px; width: 3px; height: 12px;
                         transform: translateX(-50%); background: var(--warn); }
+.route-node { stroke: var(--route); fill: var(--card); fill-opacity: 1; stroke-width: 2; }

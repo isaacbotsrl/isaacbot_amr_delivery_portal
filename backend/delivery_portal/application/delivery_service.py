@@ -247,9 +247,27 @@ class DeliveryService:
     def create_ticket(self, customer: str, destination: GeoPoint, address: str = '',
                       phone: str = '', notes: str = '') -> Ticket:
         ticket = Ticket.create(customer, destination, address, phone, notes, now=self.clock())
+        ticket = self._with_shop_route(ticket)
         with self._lock:
             self.tickets.save(ticket)
         return ticket
+
+    def _with_shop_route(self, ticket: Ticket) -> Ticket:
+        """The walking route from the pizzeria, so the map shows it right away (best effort)."""
+        try:
+            route = self.router.route(self.shop, ticket.destination)
+            points = list(route.points) or [ticket.destination]
+            if (points[-1].lat, points[-1].lon) != (ticket.destination.lat,
+                                                    ticket.destination.lon):
+                points.append(ticket.destination)
+            built = build_order('preview', self.datum, self.datum.to_enu(self.shop), points,
+                                self.settings.order, with_cargo=False)
+        except Exception as e:  # noqa: B902 router down: the ticket still exists, no route yet
+            log.warning('no route for new ticket %s: %s', ticket.id, e)
+            return replace(ticket, error=f'No walking route yet: {e}')
+        return replace(ticket, route=[self.datum.to_geo(p) for p in built.waypoints],
+                       distance_m=built.distance_m,
+                       eta_s=self.settings.eta.trip_s(built.distance_m))
 
     def ticket(self, ticket_id: str) -> Ticket:
         ticket = self.tickets.get(ticket_id)
