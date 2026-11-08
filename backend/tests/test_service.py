@@ -313,3 +313,19 @@ def test_a_new_ticket_gets_its_route_from_the_pizzeria():
     router.fail = True
     t2 = svc.create_ticket('Bob', CUSTOMER)
     assert t2.route == [] and 'No walking route' in t2.error
+
+
+def test_delete_finished_tickets_but_never_a_running_one():
+    svc, _, _, _, _ = make()
+    online(svc)
+    new = svc.create_ticket('New', CUSTOMER)
+    running = svc.assign(svc.create_ticket('Running', CUSTOMER).id, 'ardennes_1')
+    cancelled = svc.cancel(svc.create_ticket('Cancelled', CUSTOMER).id)
+    with pytest.raises(TicketError, match='cancel it first'):
+        svc.delete_ticket(running.id)
+    svc.delete_ticket(new.id)
+    with pytest.raises(NotFound):
+        svc.ticket(new.id)
+    assert svc.clear_finished() == 1
+    assert [t.id for t in svc.list_tickets()] == [running.id]
+    assert cancelled.id not in [t.id for t in svc.tickets.list()]

@@ -74,6 +74,10 @@ class SqliteTicketRepository(TicketRepository):
                                    (ticket_id,)).fetchone()
         return ticket_from_dict(json.loads(row[0])) if row else None
 
+    def delete(self, ticket_id: str) -> bool:
+        with self._lock, self._db:
+            return self._db.execute('DELETE FROM tickets WHERE id = ?', (ticket_id,)).rowcount > 0
+
     def list(self, include_closed_since: Optional[float] = None) -> List[Ticket]:
         closed = [s.value for s in CLOSED]
         with self._lock:

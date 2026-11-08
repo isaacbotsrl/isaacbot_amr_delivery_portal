@@ -165,6 +165,18 @@ export default function App() {
                     <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
                     {' '}show finished (24 h)
                   </label>
+                  {showClosed && tickets.some((t) => ['DONE', 'CANCELLED', 'FAILED'].includes(t.status)) && (
+                    <button type="button" className="btn-small btn-danger" onClick={() => {
+                      const n = tickets.filter((t) => ['DONE', 'CANCELLED', 'FAILED'].includes(t.status)).length;
+                      if (window.confirm(`Delete all ${n} finished tickets? This cannot be undone.`)) {
+                        void robotCmd(async () => {
+                          const r = await api.clearFinished();
+                          if (selected && !selected.active) setSelectedId(null);
+                          return r;
+                        }, 'Finished tickets deleted.');
+                      }
+                    }}>Clear finished</button>
+                  )}
                 </div>
               )}
               <ul className="tickets">

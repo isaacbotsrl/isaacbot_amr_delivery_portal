@@ -23,7 +23,7 @@ from ..domain.ports import (FleetSource, GeocodeResult, Geocoder, OrderPublisher
                             RoutingError, RoutingProvider, SettingsRepository, TicketRepository)
 from ..domain.robots import Robot, RobotStatus, parse_state
 from ..domain.settings import DeliverySettings
-from ..domain.tickets import Ticket, TicketError, TicketStatus
+from ..domain.tickets import CLOSED, Ticket, TicketError, TicketStatus
 
 log = logging.getLogger(__name__)
 
@@ -274,6 +274,24 @@ class DeliveryService:
         if ticket is None:
             raise NotFound(f'no ticket {ticket_id!r}')
         return ticket
+
+    def delete_ticket(self, ticket_id: str) -> None:
+        """Forget a finished ticket (or one never sent). A running delivery is cancelled first."""
+        with self._lock:
+            ticket = self.ticket(ticket_id)
+            if ticket.active:
+                raise TicketError(f'ticket {ticket.id} is {ticket.status.value}: cancel it first, '
+                                  'so no robot keeps an order the portal forgot')
+            self.tickets.delete(ticket.id)
+            log.info('ticket %s (%s) deleted', ticket.id, ticket.status.value)
+
+    def clear_finished(self) -> int:
+        """Delete every DONE / CANCELLED / FAILED ticket; how many."""
+        with self._lock:
+            closed = [t for t in self.tickets.list() if t.status in CLOSED]
+            for t in closed:
+                self.tickets.delete(t.id)
+            return len(closed)
 
     def list_tickets(self, closed_hours: float = 24.0) -> List[Ticket]:
         return sorted(self.tickets.list(self.clock() - closed_hours * 3600),

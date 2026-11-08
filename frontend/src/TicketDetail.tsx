@@ -177,6 +177,14 @@ export default function TicketDetail({ ticket: t, robots, busyRobots, config, pl
           <button type="button" className="btn-small" disabled={busy}
                   onClick={() => void run(() => api.retry(t.id))}>Retry</button>
         )}
+        {!t.active && (
+          <button type="button" className="btn-small btn-danger" disabled={busy}
+                  onClick={() => {
+                    if (window.confirm(`Delete the ticket of ${t.customer}? It cannot be undone.`)) {
+                      void run(async () => { await api.remove(t.id); onClose(); });
+                    }
+                  }}>Delete</button>
+        )}
       </div>
       {error && <p className="error" role="alert">{error}</p>}
 

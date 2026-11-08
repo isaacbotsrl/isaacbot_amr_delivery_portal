@@ -102,7 +102,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
           font-size: 13px; }
 .notes { white-space: pre-wrap; background: var(--chip); border-radius: 8px; padding: 6px 8px; }
 
-.list-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.list-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .tickets, .robots, .errors, .history { list-style: none; margin: 0; padding: 0; }
 .tickets { display: flex; flex-direction: column; gap: 6px; }
 .ticket { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left;

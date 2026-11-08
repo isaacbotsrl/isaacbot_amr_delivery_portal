@@ -68,6 +68,10 @@ class TicketRepository(ABC):
     def list(self, include_closed_since: Optional[float] = None) -> List[Ticket]:
         """Open tickets, plus closed ones updated after include_closed_since (None: all)."""
 
+    @abstractmethod
+    def delete(self, ticket_id: str) -> bool:
+        """Remove a ticket; False when there was none."""
+
 
 class SettingsRepository(ABC):
     @abstractmethod

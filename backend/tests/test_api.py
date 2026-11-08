@@ -77,3 +77,13 @@ def test_settings_round_trip_and_validation(client):
     assert cfg['datum'] == [44.43, 26.11] and cfg['parked_heading_deg'] == 270
     s['parked_heading_deg'] = 999
     assert client.put('/api/settings', headers=h, json=s).status_code == 400
+
+
+def test_delete_ticket(client):
+    h = auth()
+    dest = DATUM.to_geo(EnuPoint(40, 30))
+    tid = client.post('/api/tickets', headers=h, json={'customer': 'Ana', 'lat': dest.lat,
+                                                       'lon': dest.lon}).json()['id']
+    assert client.delete(f'/api/tickets/{tid}', headers=h).status_code == 200
+    assert client.get(f'/api/tickets/{tid}', headers=h).status_code == 404
+    assert client.post('/api/tickets/clear-finished', headers=h).json() == {'deleted': 0}

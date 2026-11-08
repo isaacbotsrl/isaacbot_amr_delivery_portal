@@ -132,6 +132,15 @@ def create_app(service: DeliveryService, info: Dict, password: str = '',
     def get_ticket(ticket_id: str):
         return ticket_json(service.ticket(ticket_id), service)
 
+    @app.delete('/api/tickets/{ticket_id}')
+    def delete_ticket(ticket_id: str):
+        service.delete_ticket(ticket_id)
+        return {'deleted': ticket_id}
+
+    @app.post('/api/tickets/clear-finished')
+    def clear_finished():
+        return {'deleted': service.clear_finished()}
+
     @app.post('/api/tickets/{ticket_id}/plan')
     def plan(ticket_id: str, body: RobotChoice):
         return plan_json(service.plan(ticket_id, body.robot))
