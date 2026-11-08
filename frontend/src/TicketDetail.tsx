@@ -117,7 +117,13 @@ export default function TicketDetail({ ticket: t, robots, busyRobots, config, pl
         </div>
       )}
 
-      {assigned && t.active && (
+      {t.status === 'ASSIGNED' && !t.order_sent && (
+        <p className="muted">
+          {t.robot} is starting a fresh lidar map and aligning it to GPS; the order follows.
+        </p>
+      )}
+
+      {assigned && t.active && t.order_sent && (
         <p className="muted">
           {assigned.name}: {assigned.driving ? 'driving' : assigned.paused ? 'paused' : 'stopped'}
           {assigned.last_node_id && ` · passed ${assigned.last_node_id}`}

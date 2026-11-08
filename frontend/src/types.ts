@@ -19,6 +19,8 @@ export interface Ticket {
   outbound_order_id: string;
   return_order_id: string;
   destination_node_id: string;
+  trip_action_id: string;
+  order_sent: boolean;
   route: LatLon[];
   distance_m: number;
   eta_s: number;
@@ -77,6 +79,7 @@ export interface PortalConfig {
   routing: string;
   cargo_actions: boolean;
   auto_return: boolean;
+  start_trip: boolean;
   max_speed: number;
   waypoint_spacing_m: number;
 }

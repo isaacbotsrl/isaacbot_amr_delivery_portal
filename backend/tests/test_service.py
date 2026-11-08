@@ -14,11 +14,11 @@ DATUM = EnuDatum(SHOP, 'enu_test')
 CUSTOMER = DATUM.to_geo(EnuPoint(60, 40))
 
 
-def make(cargo=False, auto_return=True):
+def make(cargo=False, auto_return=True, start_trip=False):
     clock, router, pub, fleet = Clock(), LRouter(), Publisher(), Fleet()
     svc = DeliveryService(DATUM, SHOP, router, None, fleet, pub, SqliteTicketRepository(':memory:'),
                           Settings(order=OrderSettings(cargo_actions=cargo),
-                                   auto_return=auto_return), clock=clock)
+                                   auto_return=auto_return, start_trip=start_trip), clock=clock)
     svc.refresh_fleet()
     return svc, clock, router, pub, fleet
 
@@ -216,3 +216,35 @@ def test_pause_resume_and_return_robot():
     assert [i[1]['actions'][0]['actionType'] for i in pub.instant] == ['startPause', 'stopPause']
     order = svc.return_robot('ardennes_1')
     assert order['nodes'][-1]['nodeId'] == 'shop'
+
+
+def test_start_trip_first_then_the_order_from_the_new_position():
+    svc, _, router, pub, _ = make(start_trip=True)
+    online(svc)
+    t = svc.assign(svc.create_ticket('Ana', CUSTOMER).id, 'ardennes_1')
+    assert t.status == TicketStatus.ASSIGNED and not t.order_sent
+    assert pub.orders == []
+    trip = pub.instant[-1][1]['actions'][0]
+    assert trip['actionType'] == 'startTrip' and trip['actionId'] == t.trip_action_id
+    online(svc, actions=[(t.trip_action_id, 'RUNNING')])
+    assert pub.orders == []
+    # The fresh map put the robot 1 m east of where it was planned from.
+    online(svc, x=1.0, y=0.0, actions=[(t.trip_action_id, 'FINISHED')])
+    t = svc.ticket(t.id)
+    assert t.order_sent and len(pub.orders) == 1
+    order = pub.orders[0][1]
+    assert order['orderId'] == t.order_id
+    assert order['nodes'][0]['nodePosition']['x'] == 1.0
+    online(svc, x=1.0, order_id=t.order_id, last_node='start', driving=True)
+    assert svc.ticket(t.id).status == TicketStatus.EN_ROUTE
+
+
+def test_start_trip_failure_fails_the_ticket():
+    svc, _, _, pub, _ = make(start_trip=True)
+    online(svc)
+    t = svc.assign(svc.create_ticket('Ana', CUSTOMER).id, 'ardennes_1')
+    online(svc, actions=[(t.trip_action_id, 'FAILED')])
+    t = svc.ticket(t.id)
+    assert t.status == TicketStatus.FAILED and 'startTrip failed' in t.error
+    assert pub.orders == []
+    assert svc.retry(t.id).trip_action_id == ''

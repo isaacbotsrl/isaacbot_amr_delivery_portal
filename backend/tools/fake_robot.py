@@ -3,8 +3,9 @@
 A fake VDA 5050 2.0 robot for trying the portal without hardware.
 
 It drives every order's nodes in a straight line at --speed, publishing `state` (agvPosition in
-the shared ENU frame, as the real adapter will once aligned, plus a noisy gpsFix information
-entry) and `connection`. It honours cancelOrder, startPause / stopPause, and finishes the cargo
+the shared ENU frame, as the real adapter does once aligned, plus a noisy gpsFix information
+entry) and `connection`. It honours cancelOrder, startPause / stopPause and startTrip (FINISHED
+after 3 s, as the real one once its fresh SLAM map is aligned to GPS), and finishes the cargo
 actions (confirmPickup after --pickup-s seconds) when an order carries them.
 
     python tools/fake_robot.py --host 127.0.0.1 --serial SIM001 --datum 44.4268,26.1025
@@ -70,13 +71,16 @@ class FakeRobot:
                 self.order_id = body['orderId']
                 self.nodes = [n for n in body['nodes'] if n['sequenceId'] > 0]
                 self.last_node, self.last_seq = body['nodes'][0]['nodeId'], 0
-                self.actions = {a['actionId']: [a['actionType'], 'WAITING', 0.0]
-                                for n in body['nodes'] for a in n.get('actions', [])}
+                self.actions = {k: v for k, v in self.actions.items() if v[0] == 'startTrip'}
+                self.actions.update({a['actionId']: [a['actionType'], 'WAITING', 0.0]
+                                     for n in body['nodes'] for a in n.get('actions', [])})
                 print(f'{self.args.serial}: order {self.order_id}, {len(self.nodes)} nodes',
                       flush=True)
             else:
                 for a in body.get('actions', []):
                     t = a['actionType']
+                    if t == 'startTrip':
+                        self.actions[a['actionId']] = [t, 'RUNNING', time.time()]
                     if t == 'cancelOrder':
                         self.nodes = []
                     elif t == 'startPause':
@@ -87,6 +91,10 @@ class FakeRobot:
 
     def step(self, dt):
         with self.lock:
+            for entry in self.actions.values():
+                if entry[0] == 'startTrip' and entry[1] == 'RUNNING' and time.time() - entry[2] > 3:
+                    entry[1] = 'FINISHED'
+
             if self.nodes and not self.paused:
                 target = self.nodes[0]
                 tx, ty = target['nodePosition']['x'], target['nodePosition']['y']

@@ -24,6 +24,7 @@ services:
       ROUTING_PROVIDER: "${ROUTING_PROVIDER:-osrm}"
       GEOCODE_COUNTRIES: "${GEOCODE_COUNTRIES:-}"
       CARGO_ACTIONS: "true"
+      START_TRIP: "true"
       DATABASE: /tmp/sim.sqlite
     ports:
       - "127.0.0.1:8041:8040"

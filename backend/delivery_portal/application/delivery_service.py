@@ -50,6 +50,9 @@ class Settings:
     order: OrderSettings = OrderSettings()
     eta: EtaEstimator = EtaEstimator()
     auto_return: bool = True     # send the robot home as soon as the ticket is delivered
+    # Send startTrip first (the robot maps afresh and aligns to GPS) and the order once it
+    # finished. Off for robots without the delivery adapter (map-frame orders, simulation).
+    start_trip: bool = True
 
 
 class DeliveryService:
@@ -132,6 +135,9 @@ class DeliveryService:
     def _follow(self, ticket: Ticket, robot: Robot) -> None:
         """Advance a ticket from its robot's state."""
         s: RobotStatus = robot.status
+        if not ticket.order_sent:
+            self._follow_trip_start(ticket, robot)
+            return
         if s.order_id != ticket.order_id or not ticket.order_id:
             return
         fatal = [e for e in s.errors if e['level'] == 'FATAL']
@@ -159,6 +165,28 @@ class DeliveryService:
         elif ticket.status == TicketStatus.RETURNING:
             if not s.remaining_node_ids and s.last_node_id == 'shop':
                 self._move(ticket, TicketStatus.DONE, 'back at the shop')
+
+    def _follow_trip_start(self, ticket: Ticket, robot: Robot) -> None:
+        """startTrip finished: the robot maps afresh and is aligned, so the order goes out now."""
+        action = robot.status.action(ticket.trip_action_id)
+        if action is None or action.status not in ('FINISHED', 'FAILED'):
+            return
+        if action.status == 'FAILED':
+            self._move(ticket, TicketStatus.FAILED, 'the trip could not start',
+                       error=f'startTrip failed: {action.result or "no reason given"}')
+            return
+        try:
+            plan = self._plan_to(robot, ticket.destination, ticket.order_id)
+            self.publisher.publish_order(robot.identity, plan.built.order)
+        except Exception as e:  # noqa: B902 routing or broker: the ticket shows why
+            self._move(ticket, TicketStatus.FAILED, 'the order could not be sent',
+                       error=f'{type(e).__name__}: {e}')
+            return
+        ticket = replace(ticket, order_sent=True, route=plan.waypoints,
+                         destination_node_id=plan.built.destination_node_id,
+                         distance_m=plan.built.distance_m, eta_s=plan.eta_s)
+        self.tickets.save(ticket)
+        log.info('ticket %s: trip started, order %s sent', ticket.id, ticket.order_id)
 
     def _move(self, ticket: Ticket, status: TicketStatus, note: str = '', **changes) -> Ticket:
         ticket = ticket.transition(status, note, now=self.clock(), **changes)
@@ -252,14 +280,24 @@ class DeliveryService:
                 raise TicketError(f'ticket {ticket.id} is {ticket.status.value}, not NEW')
             robot = self.robot(robot_name)
             self._check_dispatchable(robot, ticket.id)
+            # Planned now (route check, ETA); with startTrip, re-planned once the robot is ready.
             plan = self._plan_to(robot, ticket.destination, _order_id(ticket, 'o'))
-            self.publisher.publish_order(robot.identity, plan.built.order)
             order_id = plan.built.order['orderId']
+            trip_action_id = ''
+            if self.settings.start_trip:
+                trip_action_id = f'{order_id}-startTrip'
+                self.publisher.publish_instant_actions(
+                    robot.identity, instant_action('startTrip', trip_action_id))
+                note = f'{robot.name}: starting a fresh map'
+            else:
+                self.publisher.publish_order(robot.identity, plan.built.order)
+                note = f'{robot.name}, {plan.built.distance_m:.0f} m'
             return self._move(
-                ticket, TicketStatus.ASSIGNED, f'{robot.name}, {plan.built.distance_m:.0f} m',
+                ticket, TicketStatus.ASSIGNED, note,
                 robot=robot.name, order_id=order_id, outbound_order_id=order_id,
                 destination_node_id=plan.built.destination_node_id, route=plan.waypoints,
-                distance_m=plan.built.distance_m, eta_s=plan.eta_s, error='')
+                distance_m=plan.built.distance_m, eta_s=plan.eta_s, error='',
+                trip_action_id=trip_action_id, order_sent=not self.settings.start_trip)
 
     def _send_return(self, ticket: Ticket, robot: Robot) -> Ticket:
         order_id = _order_id(ticket, 'r')

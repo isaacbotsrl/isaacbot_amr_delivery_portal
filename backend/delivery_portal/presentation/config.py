@@ -48,6 +48,7 @@ class Config:
     destination_tolerance_m: float = 3.0
     cargo_actions: bool = False
     auto_return: bool = True
+    start_trip: bool = True
 
     @staticmethod
     def from_env() -> 'Config':
@@ -79,4 +80,5 @@ class Config:
             destination_tolerance_m=_float('DESTINATION_TOLERANCE_M', 3.0),
             cargo_actions=_bool('CARGO_ACTIONS', False),
             auto_return=_bool('AUTO_RETURN', True),
+            start_trip=_bool('START_TRIP', True),
         )

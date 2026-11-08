@@ -74,6 +74,8 @@ class Ticket:
     outbound_order_id: str = ''
     return_order_id: str = ''
     destination_node_id: str = ''   # the outbound order's last node
+    trip_action_id: str = ''        # the startTrip instant action sent before the order
+    order_sent: bool = True         # False while startTrip runs (the order waits for it)
     route: List[GeoPoint] = field(default_factory=list)   # planned outbound route
     distance_m: float = 0.0
     eta_s: float = 0.0
@@ -113,6 +115,7 @@ class Ticket:
         now = time.time() if now is None else now
         if status == TicketStatus.NEW:  # a retry: forget the previous robot and orders
             changes = dict(robot='', order_id='', outbound_order_id='', return_order_id='',
-                           destination_node_id='', error='', **changes)
+                           destination_node_id='', trip_action_id='', order_sent=True, error='',
+                           **changes)
         return replace(self, status=status, updated_at=now,
                        history=[*self.history, TicketEvent(now, status, note)], **changes)

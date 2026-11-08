@@ -35,7 +35,8 @@ def build(cfg: Config):
         order=OrderSettings(spacing_m=cfg.waypoint_spacing_m, max_speed=cfg.max_speed,
                             destination_tolerance_m=cfg.destination_tolerance_m,
                             cargo_actions=cfg.cargo_actions),
-        eta=EtaEstimator(speed=cfg.max_speed), auto_return=cfg.auto_return)
+        eta=EtaEstimator(speed=cfg.max_speed), auto_return=cfg.auto_return,
+        start_trip=cfg.start_trip)
     service = DeliveryService(
         datum, shop,
         make_router(cfg.routing_provider, cfg.routing_url, cfg.google_api_key),
@@ -47,6 +48,7 @@ def build(cfg: Config):
         'datum': [cfg.datum_lat, cfg.datum_lon], 'shop': [cfg.shop_lat, cfg.shop_lon],
         'map_id': cfg.enu_map_id, 'routing': cfg.routing_provider,
         'cargo_actions': cfg.cargo_actions, 'auto_return': cfg.auto_return,
+        'start_trip': cfg.start_trip,
         'max_speed': cfg.max_speed, 'waypoint_spacing_m': cfg.waypoint_spacing_m,
     }
     stop = threading.Event()

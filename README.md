@@ -45,7 +45,7 @@ robot's position only shows up once its adapter reports the ENU frame or a `gpsF
 | Status | What happens |
 |---|---|
 | `NEW` | Ticket created. |
-| `ASSIGNED` | The order was sent. It starts at the robot's position and has a node every `WAYPOINT_SPACING_M` along the route (corners kept), plus the `destination` node. |
+| `ASSIGNED` | With `START_TRIP=true` (default), the instant action `startTrip` goes out first. The robot starts a fresh SLAM map and aligns it to GPS. Once it reports `FINISHED`, the order is sent. It starts at the robot's position and has a node every `WAYPOINT_SPACING_M` along the route (corners kept), plus the `destination` node. |
 | `EN_ROUTE` | The robot accepted the order and is driving. The ETA counts down. |
 | `ARRIVED` | The robot reached `destination`, within `DESTINATION_TOLERANCE_M`. |
 | `DELIVERED` | The customer confirmed (`confirmPickup` finished, `CARGO_ACTIONS=true`), or staff pressed **Mark delivered**. |
