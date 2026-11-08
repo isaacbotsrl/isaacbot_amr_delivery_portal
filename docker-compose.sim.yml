@@ -1,0 +1,41 @@
+# Try the portal without robots: a private broker + one fake VDA 5050 robot.
+#   docker compose -f docker-compose.sim.yml up --build
+#   open http://127.0.0.1:8041  (user any, password "sim")
+# The fake robot drives 5x real time from the datum (the pizzeria).
+x-datum: &datum
+  DATUM_LAT: "${DATUM_LAT:-44.4268}"
+  DATUM_LON: "${DATUM_LON:-26.1025}"
+  ENU_MAP_ID: enu_sim
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0.20
+    command: mosquitto -c /mosquitto-no-auth.conf
+
+  portal:
+    build: .
+    image: isaacbot-delivery-portal:latest
+    depends_on: [mosquitto]
+    environment:
+      <<: *datum
+      PORTAL_PASSWORD: sim
+      FLEET: sim_1:SIM001,sim_2:SIM002
+      MQTT_HOST: mosquitto
+      ROUTING_PROVIDER: "${ROUTING_PROVIDER:-osrm}"
+      GEOCODE_COUNTRIES: "${GEOCODE_COUNTRIES:-}"
+      CARGO_ACTIONS: "true"
+      DATABASE: /tmp/sim.sqlite
+    ports:
+      - "127.0.0.1:8041:8040"
+
+  robot-1:
+    image: isaacbot-delivery-portal:latest
+    depends_on: [portal]
+    environment: *datum
+    command: python tools/fake_robot.py --host mosquitto --serial SIM001 --map-id enu_sim --time-scale 5 --pickup-s 10
+
+  robot-2:
+    image: isaacbot-delivery-portal:latest
+    depends_on: [portal]
+    environment: *datum
+    command: python tools/fake_robot.py --host mosquitto --serial SIM002 --map-id enu_sim --time-scale 5 --pickup-s 10 --start-x 6

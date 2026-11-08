@@ -1,0 +1,17 @@
+# Server: isaacbot-server-001 (WireGuard 10.8.0.1). Port 8030 is the RMF container's: we use 8040.
+#   cp .env.example .env   # fill it in (untracked)
+#   docker compose build && docker compose up -d
+services:
+  portal:
+    build: .
+    image: isaacbot-delivery-portal:latest
+    container_name: isaacbot-delivery-portal
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${BIND_ADDRESS:-10.8.0.1}:${HOST_PORT:-8040}:8040"
+    volumes:
+      - portal-data:/data
+
+volumes:
+  portal-data:
